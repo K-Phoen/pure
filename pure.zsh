@@ -127,6 +127,15 @@ prompt_pure_preprompt_render() {
 		preprompt_parts+=('%F{cyan}${prompt_pure_git_arrows}%f')
 	fi
 
+	# Add k8s context info.
+	typeset -gA prompt_pure_k8s_info
+	#local k8s_color=202
+	local k8s_color=136
+	#local k8s_color=3
+	if [[ -n $prompt_pure_k8s_info[context] ]]; then
+		preprompt_parts+=("%F{$k8s_color}"'${prompt_pure_k8s_info[context]}%f')
+	fi
+
 	# Username and machine, if applicable.
 	[[ -n $prompt_pure_state[username] ]] && preprompt_parts+=('${prompt_pure_state[username]}')
 	# Execution time.
@@ -222,6 +231,16 @@ prompt_pure_async_git_aliases() {
 	done
 
 	print -- ${(j:|:)pullalias}  # join on pipe (for use in regex).
+}
+
+prompt_pure_async_k8s_info() {
+	setopt localoptions noshwordsplit
+
+	local -A info
+
+	info[context]=$(kubectl config current-context)
+
+	print -r - ${(@kvq)info}
 }
 
 prompt_pure_async_vcs_info() {
@@ -340,6 +359,10 @@ prompt_pure_async_tasks() {
 
 	async_job "prompt_pure" prompt_pure_async_vcs_info
 
+	if command -v kubectl >/dev/null 2>&1 ; then
+		async_job "prompt_pure" prompt_pure_async_k8s_info
+	fi
+
 	# # only perform tasks inside git working tree
 	[[ -n $prompt_pure_vcs_info[top] ]] || return
 
@@ -428,6 +451,17 @@ prompt_pure_async_callback() {
 			# always update branch and toplevel
 			prompt_pure_vcs_info[branch]=$info[branch]
 			prompt_pure_vcs_info[top]=$info[top]
+
+			do_render=1
+			;;
+		prompt_pure_async_k8s_info)
+			local -A info
+			typeset -gA prompt_pure_k8s_info
+
+			# parse output (z) and unquote as array (Q@)
+			info=("${(Q@)${(z)output}}")
+
+			prompt_pure_k8s_info[context]=$info[context]
 
 			do_render=1
 			;;
